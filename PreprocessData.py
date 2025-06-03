@@ -1,5 +1,3 @@
-#A créer GitHub pour ton dropper le code
-
 import os
 import glob
 import pandas as pd
@@ -15,8 +13,9 @@ input_folder = os.path.join(
     "OneDrive - Cégep de Shawinigan",
     "Bureau",
     "Stage CERVO",
-    "Data",
+    "Data2",
 )
+
 output_folder = os.path.join(input_folder, "processed")
 os.makedirs(output_folder, exist_ok=True)
 
@@ -70,8 +69,24 @@ def calcPercentile(segments, perc):
     values = [np.percentile(seg, perc) for seg in segments]
     return np.nanmean(values)
 
-
 #Ajout calcul SNR en dépassant 2 sigma selon cote Z et bruit = std deviation (MAD) fois 1,42...
+def PeakFinder(Zscore):
+    Peak = []
+    PeakMean = []
+    for value in Zscore:
+        if value >= 2:
+            Peak.append(value)
+        if value < 2:
+            if len(Peak) > 1:
+                Maximum = np.max(Peak)
+                PeakMean.append(Maximum)
+                Peak = []
+    if len(Peak) > 1:
+        Maximum = np.max(Peak)
+        PeakMean.append(Maximum)
+    Moyenne = np.nanmean(PeakMean)
+    return Moyenne
+
 
 pattern = os.path.join(input_folder, "*.csv")
 for file_path in glob.glob(pattern):
@@ -103,18 +118,26 @@ for file_path in glob.glob(pattern):
     gcamp_corr = bleaching_correct(gcamp_filt, time_tr)
 
     Calcium_Dff, Baseline = ScalingDFF(gcamp_corr)
-
- 
     Calcium_Zscore = zscore(gcamp_corr, nan_policy="omit")
 
-
-    Fscaled = Calcium_Dff
+    Gcamp_corriger = bleaching_correct(gcamp_tr, time_tr)
+    Fscaled, Baseline2 = ScalingDFF(Gcamp_corriger)
+    Calcium_NoProccess_Z = zscore(Gcamp_corriger, nan_policy="omit")
+    PeakZ = PeakFinder(Calcium_NoProccess_Z)
+    NoiseZ = noise_std_from_diff(Calcium_NoProccess_Z)
+    SNRZ = float(PeakZ) / NoiseZ
+    
     Noise = noise_std_from_diff(Fscaled)
     segments = sliding(Fscaled, window)
     SNR95 = calcPercentile(segments, 95) / Noise
     Value95 = calcPercentile(segments, 95)
 
- 
+    Normalized_noise_levels = (np.nanmedian(np.abs(np.diff(Fscaled, axis=-1)), axis=-1) / np.sqrt(frame_rate)) * 100
+
+    print(f"Normalized noise : {Normalized_noise_levels}")
+    print(f"SNR with DFF : {SNR95}")
+    print(f"SNR with Z score : {SNRZ}")
+
     df_out = pd.DataFrame({
         "Time"             : time_tr,
         "1 Spikes"         : ephys_tr,
@@ -124,7 +147,9 @@ for file_path in glob.glob(pattern):
         "gcamp_corrected"  : gcamp_corr,
         "Calcium_Dff"      : Calcium_Dff,
         "Calcium_Zscore"   : Calcium_Zscore,
-        "SNR95%_threshold"  : Value95 * np.ones_like(time_tr),
+        "Normalized Noise Level" : Normalized_noise_levels * np.ones_like(time_tr),
+        "SNR95%"           : SNR95 * np.ones_like(time_tr),
+        "SNR with Z score" : SNRZ * np.ones_like(time_tr),
         "Baseline"         : Baseline * np.ones_like(time_tr),
     })
     # Si vous souhaitez inclure les spikes tronqués :
@@ -160,6 +185,7 @@ for file_path in glob.glob(pattern):
     ax4.plot(time_tr, Calcium_Zscore, color="purple")
     ax4.set_title("Z-score")
     ax4.set_ylabel("Z-score (σ)")
+
     
     plt.tight_layout()
     plt.show()
