@@ -1,0 +1,18 @@
+## Compiled python files
+*.c
+*.cpp
+*.so
+*.pyc
+
+# Distribution / packaging
+build/
+
+# MacOS
+*.DS_Store
+*.egg-info/
+
+# Editors
+.idea/
+
+# Environment
+.venv/
