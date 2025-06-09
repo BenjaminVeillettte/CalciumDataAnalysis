@@ -30,7 +30,7 @@ file_path = os.path.join(folder_path, file_data)
 time, ephys, gcamp, spikes = ReadData(file_path)
 
 
-datatoCascade = gcamp
+
 base = os.path.join(
   os.path.expanduser("~"),
   "OneDrive - Cégep de Shawinigan",

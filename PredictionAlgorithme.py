@@ -146,4 +146,3 @@ def predictionOasis(base, time, gcamp):
    y = data['3 PMT1'].values
    c, s, b, g, lam = deconvolve(y, penalty=1)
    return s 
-

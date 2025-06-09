@@ -7,6 +7,8 @@ from sklearn.preprocessing import MinMaxScaler
 import ruamel.yaml as yaml
 yaml = yaml.YAML(typ='rt')
 
+from PredictionAlgorithme import predictionCascade, predictionOasis, ReadData
+
 folder_path = os.path.join(
     os.path.expanduser("~"), 
     "OneDrive - Cégep de Shawinigan", 
@@ -14,72 +16,12 @@ folder_path = os.path.join(
     "Stage CERVO", 
     "Data", 
 )
-file_data = f"m_neuron11_20241103_VPLR_DV1657.csv"
+file_data = f"m_neuron4_stim_867.csv"
 file_path = os.path.join(folder_path, file_data)
 
-    
-with open(file_path, "r", encoding="utf-8") as f:
-    lines = f.readlines()
-
-    # Lecture en DataFrame pandas à partir de data_start_index
-df = pd.read_csv(
-    file_path,
-    sep=",",          
-    decimal=".",      
-    header=0
-)
-
-Order = ['Time', '1 Spikes', 'gcamp', 'spikes']
-df = df[Order]
-
-time = df["Time"]
-ephys = df["1 Spikes"]
-gcamp = df["gcamp"]
-spikes = df["spikes"]
+time, ephys, gcamp, spikes = ReadData(file_path)
 
 
-
-folder_pathOasis = os.path.join(
-    os.path.expanduser("~"), 
-    "OneDrive - Cégep de Shawinigan", 
-    "Bureau", 
-    "Stage CERVO",
-    "Code",
-    "OASIS"
-)
-
-# Ajouter le chemin pour les modules oasis
-sys.path.append(folder_pathOasis)
-from oasis.functions   import deconvolve
-
-
-
-folder_pathCascade = os.path.join(
-    os.path.expanduser("~"), 
-    "OneDrive - Cégep de Shawinigan", 
-    "Bureau", 
-    "Stage CERVO",
-    "Code",
-    "Cascade-master"
-)
-
-if not os.path.isdir(folder_pathCascade):
- raise FileNotFoundError(f"{folder_pathCascade!r} n'existe pas")
-
-# 2) Add it to Python's import search path (prioritaire)
-if folder_pathCascade not in sys.path:
- sys.path.insert(0, folder_pathCascade)
-
-# 3) Change your working dir to that same folder
-os.chdir(folder_pathCascade)
-print('Current working directory: {}'.format( os.getcwd() ))
-
-
-from cascade2p import checks, cascade
-
-checks.check_packages()
-
-datatoCascade = gcamp
 base = os.path.join(
   os.path.expanduser("~"),
   "OneDrive - Cégep de Shawinigan",
@@ -87,84 +29,13 @@ base = os.path.join(
   "Stage CERVO",
   "Code"
 )
-pathCascade = os.path.join(base, "ArrayCascade.npy")
-
-# 2) Sauvegardez
-np.save(pathCascade, datatoCascade)
-
-
-
-csv_name = "DonneesOASIS.csv"
-csv_path = os.path.join(base, csv_name)
-
-# 2) Sauvegarder un DataFrame dans ce CSV
-df = pd.DataFrame({
-    "Time": time,
-    "3 PMT1": gcamp,
-})
-df.to_csv(csv_path, index=False)
 
 frame_rate = 100 # in Hz
-
-def predictionCascade():
-   
-   def load_neurons_x_time(file_path):
-       """Custom method to load data as 2d array with shape (neurons, nr_timepoints)"""
-
-       if file_path.endswith('.npy'):
-         traces = np.load(file_path, allow_pickle=True)
-        # if saved data was a dictionary packed into a numpy array (MATLAB style): unpack
-         if traces.shape == ():
-            traces = traces.item()['dF_traces']
-       else:
-           raise Exception('This function only supports .mat or .npy files.')
-       if traces.ndim == 1:
-         traces = traces[np.newaxis, :]
-
-    # vérif’ rapide
-       if traces.ndim != 2:
-         raise ValueError(f"dff doit être 2D, got ndim={traces.ndim}")
-       return traces
-   traces = load_neurons_x_time(pathCascade)
-   print('Number of neurons in dataset:', traces.shape[0])
-   print('Number of timepoints in dataset:', traces.shape[1])
-
-   cascade.download_model( 'update_models',verbose = 1)
-   yaml_file = open('Pretrained_models/available_models.yaml')
-   X = yaml.load(yaml_file)
-   list_of_models = list(X.keys())
-   model_name = 'Global_EXC_30Hz_smoothing50ms'
-   cascade.download_model( model_name,verbose = 1)
-
-   spike_prob = cascade.predict( model_name, traces )
-   return spike_prob
-
-PredCascade = predictionCascade()
-PredCascade = PredCascade.squeeze()
-
-
-def predictionOasis():
-   data = pd.read_csv(csv_path)  
-   y = data['3 PMT1'].values
-   c, s, b, g, lam = deconvolve(y, penalty=1)
-   return s 
-
-PredOasis = predictionOasis()
-
-#print(PredOasis)
 n = 50  #changer incrément temps (100 = 1s)
-#0.01 0.05 0.1 0.25 0.5 0.75 1 sec
-# 1    5    10   25   50  75 100
 
-def troncageData(Array, PointSkip):
-   return Array[PointSkip:]
-
-Points = 0
-PredCascade = troncageData(PredCascade, Points)
-PredOasis = troncageData(PredOasis, Points)
-spikes = troncageData(spikes, Points)
-time = troncageData(time, Points)
-gcamp = troncageData(gcamp, Points)
+PredCascade = predictionCascade(base, gcamp)
+PredCascade = PredCascade.squeeze()
+PredOasis = predictionOasis(base, time, gcamp)
 
 #Smoothing des données en les moyennant autour dans une plage de valeur
 def calc_moyenne(Array, n):
