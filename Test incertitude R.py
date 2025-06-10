@@ -62,7 +62,7 @@ MoyennePredOasis = calc_moyenne(PredOasis, n)
 MoyenneSpike = calc_moyenne(spikes, n)
 MoyenneGcamp = calc_moyenne(gcamp, n)
 
-window = 20 * frame_rate
+window = 3 * frame_rate
 
 def sliding(data, window, n, step=200):
     segments = []
