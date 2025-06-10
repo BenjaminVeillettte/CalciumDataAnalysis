@@ -17,5 +17,3 @@ conda activate Cascade
 pip install oasis-deconv
 pip install scikit-learn
 ```
-
-4. Peut avoir à installer Pendas je suis pas sûr
