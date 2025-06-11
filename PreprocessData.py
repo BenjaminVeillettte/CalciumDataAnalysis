@@ -6,6 +6,7 @@ from scipy.signal import butter, filtfilt
 from scipy.optimize import curve_fit
 from scipy.stats import zscore
 import matplotlib.pyplot as plt
+from sklearn.metrics import r2_score
 
 
 input_folder = os.path.join(
@@ -36,10 +37,55 @@ def LowPass(signal):
 def Double_exponential(t, a, b, c, d, e):
     return a * np.exp(-b * t) + c * np.exp(-d * t) + e
 
+def Rising_exponential(t, const, amp, tau):
+    '''Compute a rising exponential function with constant offset.
+    Parameters:
+    t     : Time vector in seconds.
+    const : Amplitude of the constant offset. 
+    amp   : Amplitude of the rising component.  
+    tau   : Time constant of the rising component in seconds.
+    '''
+    return const + amp * (1 - np.exp(-t / tau))
+
 def bleaching_correct(calcium, time_array):
-    popt, _ = curve_fit(Double_exponential, time_array, calcium)
-    fitted = Double_exponential(time_array, *popt)
-    return calcium - fitted + np.nanmedian(calcium)
+    mask = np.isfinite(calcium) & np.isfinite(time_array)
+    calcium_clean = calcium[mask]
+    time_clean = time_array[mask]
+
+    max_sig = np.max(calcium_clean)
+    inital_params = [max_sig/2, max_sig/4, max_sig/4, 3600, 0.1] 
+    bounds = ([0      , 0      , 0      , 600  , 0],
+          [max_sig, max_sig, max_sig, 36000, 1])
+    
+    plateau  = np.percentile(calcium_clean[-1000:], 5)
+    popt, _ = curve_fit(Double_exponential, time_clean, calcium_clean, p0=inital_params, bounds=bounds, maxfev=1000)
+    fitted = Double_exponential(time_clean, *popt)
+
+    popt2, _ = curve_fit(Rising_exponential, time_clean, calcium_clean, p0=[plateau, max_sig/4, 3600], bounds=([0, 0, 600], [max_sig, max_sig, 36000]), maxfev=1000)
+    fitted2 = Rising_exponential(time_clean, *popt2)
+
+    r2DownExp = r2_score(calcium_clean, fitted)
+    r2RiseExp = r2_score(calcium_clean, fitted2)
+
+    if r2DownExp > r2RiseExp:
+        print("Using double exponential fit for bleaching correction.")
+        return calcium_clean - fitted, fitted
+    else:
+        print("Using rising exponential fit for bleaching correction.")
+        return calcium_clean - fitted2, fitted2
+
+def bleaching_correct2(calcium):
+    b,a = butter(2, 0.001, btype='high', fs=frame_rate)
+    CalciumHigh = filtfilt(b, a, calcium, padtype='even')
+    return CalciumHigh
+
+def ScalingDFF(signal, baseline):
+    dff = (signal/baseline)*100
+
+    mini = np.nanmin(dff)
+
+    dff = dff + abs(mini) if mini < 0 else dff
+    return dff
 
 def sliding(data, win, step=200):
     segments = []
@@ -50,14 +96,6 @@ def sliding(data, win, step=200):
         segments.append(data[-win :])
     return segments
 
-def ScalingDFF(signal):
-    baselines = []
-    segments = sliding(signal, window)
-    for seg in segments:
-        baselines.append(np.percentile(seg, 5))
-    baseline_mean = np.nanmean(baselines)
-    dff = ((signal / baseline_mean) - 1) * 100
-    return dff, baseline_mean
 
 def noise_std_from_diff(signal):
     diffs = np.diff(signal)

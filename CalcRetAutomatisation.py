@@ -17,10 +17,8 @@ input_folder = os.path.join(
     "OneDrive - Cégep de Shawinigan",
     "Bureau",
     "Stage CERVO",
+    "Analysis"
 )
-
-
-
 
 folder_pathOasis = os.path.join(
     os.path.expanduser("~"), 
@@ -65,14 +63,11 @@ checks.check_packages()
 frame_rate = 100 # in Hz
 window = 20 * frame_rate
 
-ArrangeGen = np.arange(0.01, 2.01, 0.5)
+ArrangeGen = np.arange(0.01, 1.02, 0.20)
 Folder_outname = []
 FolderAverage_out = []
 
-results = {
-    "Cascade": {},
-    "Oasis":   {}
-}
+results = { "Cascade": {}, "Oasis":   {}}
 
 def calc_moyenne(Array, n):
     Moyenne = []
@@ -86,7 +81,7 @@ def calc_moyenne(Array, n):
         Moyenne.append(Calc)
     return Moyenne
 
-def sliding(data, window, n, step=200):
+def sliding(data, window, n, step=500):
     segments = []
     L = len(data)
     for i in range(0, L - window + 1, step):
@@ -181,7 +176,7 @@ def ajoutdico(IncrémentDico, Array2, Array3, Array4, dicoR, dicoUp, dicoDown):
     return dicoR, dicoUp, dicoDown
 
 def MoyenneValue(dico, liste):
-    for i in np.arange(0.01, 2.02, 0.5):
+    for i in np.arange(0.01, 1.02, 0.20):
         i = np.round(i, 2)
         Moyenne = np.nanmean(dico[i])
         liste.append(Moyenne)
@@ -200,7 +195,7 @@ for folder in folder_liste:
 
     for file_path1 in glob.glob(pattern):
         df = pd.read_csv(file_path1, sep=",", decimal=".", header=0)
-        required_cols = ["Time", "1 Spikes", "gcamp", "spikes"]
+        required_cols = ["Time", "1 Spikes", "Calcium_Dff", "spikes"]
 
         for col in required_cols:
             if col not in df.columns:
@@ -210,10 +205,10 @@ for folder in folder_liste:
         
         time = df["Time"].to_numpy()
         ephys = df["1 Spikes"].to_numpy()
-        gcamp = df["gcamp"].to_numpy()
+        gcamp = df["Calcium_Dff"].to_numpy()
         spikes = df["spikes"].to_numpy()
 
-        datatoCascade = gcamp
+
         base = os.path.join(
            os.path.expanduser("~"),
            "OneDrive - Cégep de Shawinigan",
@@ -221,13 +216,18 @@ for folder in folder_liste:
            "Stage CERVO",
            "Code"
         )
+        mask = np.isfinite(gcamp) & np.isfinite(time)
+        gcamp_clean = gcamp[mask]
+        time_clean = time[mask]
+
+        datatoCascade = gcamp_clean
         
         pathCascade = os.path.join(base, "ArrayCascade.npy")
         np.save(pathCascade, datatoCascade)
 
         csv_name = "DonneesOASIS.csv"
         csv_path = os.path.join(base, csv_name)
-        df = pd.DataFrame({"Time": time,"3 PMT1": gcamp,})
+        df = pd.DataFrame({"Time": time_clean,"3 PMT1": gcamp_clean,})
         df.to_csv(csv_path, index=False)
         
         def predictionCascade():
@@ -263,7 +263,7 @@ for folder in folder_liste:
         
         PredOasis = predictionOasis()
 
-        increments = np.arange(1, 202, 50)
+        increments = np.arange(1, 102, 20)
         listeR1 = []
         listeR2 = []
         listeDev1 = []
@@ -317,7 +317,7 @@ for folder2 in Folder_outname:
     os.makedirs(output_folder, exist_ok=True)
 
     FolderAverage_out.append(output_name)
-    increments = np.arange(0.01, 2.02, 0.5)
+    increments = np.arange(0.01, 1.02, 0.20)
     increments = np.round(increments, 2)
     dicoRCascade    = {i: [] for i in increments}
     dicoUpCascade   = {i: [] for i in increments}
